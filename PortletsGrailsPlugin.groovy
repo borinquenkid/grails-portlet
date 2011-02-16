@@ -18,9 +18,9 @@ import org.springframework.core.io.Resource
 class PortletsGrailsPlugin {
 
     // the plugin version
-    def version = "0.7"
+    def version = "0.7.1"
     // the version or versions of Grails the plugin is designed for
-    def grailsVersion = "1.1 > *"
+    def grailsVersion = "1.3 > *"
     // the other plugins this plugin depends on
     def loadAfter = ['controllers']
 
@@ -74,7 +74,10 @@ Generate JSR-168 compliant portlet war.
         portletHandlerMappings(GrailsPortletHandlerMapping) {
             interceptors = [ref("portletHandlerInterceptor")]
         }
-        portletHandlerAdapter(GrailsPortletHandlerAdapter)
+        portletHandlerAdapter(GrailsPortletHandlerAdapter) {
+			portletClosureFactory = ref("portletClosureFactory")
+		}
+		portletClosureFactory(PortletClosureFactory)
         portletReloadFilter(PortletReloadFilter)
         portletHandlerInterceptor(GrailsPortletHandlerInterceptor) {
             portletReloadFilter = ref(portletReloadFilter)

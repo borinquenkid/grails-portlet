@@ -1,21 +1,13 @@
 package org.codehaus.grails.portlets;
 
-import org.springframework.web.portlet.DispatcherPortlet;
-import org.springframework.web.portlet.context.PortletApplicationContextUtils;
-import org.springframework.web.context.WebApplicationContext;
-import org.springframework.web.context.support.WebApplicationContextUtils;
-import org.springframework.context.ApplicationContext;
-import org.springframework.beans.BeansException;
-import org.springframework.beans.factory.access.BootstrapException;
-import org.springframework.util.Assert;
+import javax.portlet.ActionRequest;
+import javax.portlet.ActionResponse;
+import javax.portlet.PortletRequest;
+import javax.portlet.RenderRequest;
+import javax.portlet.RenderResponse;
+
 import org.codehaus.groovy.grails.commons.GrailsApplication;
-import org.codehaus.groovy.grails.commons.spring.GrailsApplicationContext;
-import org.codehaus.groovy.grails.web.context.GrailsConfigUtils;
-
-import javax.portlet.*;
-import javax.servlet.ServletContext;
-
-import grails.util.GrailsUtil;
+import org.springframework.web.portlet.DispatcherPortlet;
 
 /**
  * @author Lee Butts

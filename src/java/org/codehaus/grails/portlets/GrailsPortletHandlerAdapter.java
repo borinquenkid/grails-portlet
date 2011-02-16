@@ -18,131 +18,142 @@ import org.springframework.web.servlet.View;
 import org.springframework.web.servlet.ViewResolver;
 
 import javax.portlet.*;
+
 import java.util.Map;
 
 /**
  * @author Lee Butts
  */
-public class GrailsPortletHandlerAdapter implements org.springframework.web.portlet.HandlerAdapter,
-        ApplicationContextAware {
-    private ApplicationContext applicationContext;
-    private Log log = LogFactory.getLog(this.getClass());
+public class GrailsPortletHandlerAdapter implements
+		org.springframework.web.portlet.HandlerAdapter, ApplicationContextAware {
+	private ApplicationContext applicationContext;
+	private Log log = LogFactory.getLog(this.getClass());
+	private PortletClosureFactory portletClosureFactory;
 
-    public boolean supports(Object o) {
-        return o instanceof GroovyObject;
-    }
+	public void setPortletClosureFactory(
+			PortletClosureFactory portletClosureFactory) {
+		this.portletClosureFactory = portletClosureFactory;
+	}
 
-    public void handleAction(ActionRequest actionRequest, ActionResponse actionResponse, Object o) throws Exception {
-        GroovyObject portlet = (GroovyObject) o;
-        String action = actionRequest.getParameter("action");
-        Closure actionClosure = getActionClosure(actionRequest, portlet, action);
-        actionClosure.call();
-    }
+	public boolean supports(Object o) {
+		return o instanceof GroovyObject;
+	}
 
-    private Closure getActionClosure(PortletRequest request, GroovyObject portlet, String actionParameter) {
-        return getPortletClosure(request, portlet, actionParameter, "action");
-    }
+	public void handleAction(ActionRequest actionRequest,
+			ActionResponse actionResponse, Object o) throws Exception {
+		GroovyObject portlet = (GroovyObject) o;
+		String action = actionRequest.getParameter("action");
+		Closure actionClosure = portletClosureFactory.getActionClosure(
+				actionRequest, portlet, action);
+		actionClosure.call();
+	}
 
-    private Closure getRenderClosure(PortletRequest request, GroovyObject portlet, String actionParameter) {
-        return getPortletClosure(request, portlet, actionParameter, "render");
-    }
+	public ModelAndView handleRender(RenderRequest renderRequest,
+			RenderResponse renderResponse, Object o) throws Exception {
+		if (getMinimisedConfig() != null
+				&& renderRequest.getWindowState().equals(WindowState.MINIMIZED)) {
+			log.debug("portlet.handleMinimised is set, rendering empty string");
+			renderResponse.setContentType("text/html");
+			renderResponse.getPortletOutputStream().write("".getBytes());
+			return null;
+		} else {
+			GroovyObject portlet = (GroovyObject) o;
+			String action = renderRequest.getParameter("action");
+			Closure render = portletClosureFactory.getRenderClosure(
+					renderRequest, portlet, action);
+			Object returnValue = render.call();
+			if (returnValue instanceof Map) {
+				@SuppressWarnings("unchecked")
+				Map<String, Object> map = (Map<String, Object>) returnValue;
+				map.put("portletRequest", renderRequest);
+				map.put("portletResponse", renderResponse);
+				renderRequest.setAttribute(
+						GrailsApplicationAttributes.CONTROLLER, portlet);
+				String portletName = renderRequest.getAttribute(
+						GrailsDispatcherPortlet.PORTLET_NAME).toString();
+				String uncapitalizedPortletName = StringUtils
+						.uncapitalize(portletName);
+				String viewName = "/" + uncapitalizedPortletName + "/"
+						+ renderRequest.getParameter("action") + ".gsp";
+				if (tryResolveView(viewName)) {
+					log.debug("Trying to render action view " + viewName
+							+ ".gsp");
+				} else {
+					log.debug("Couldn't resolve action view " + viewName);
+					viewName = "/"
+							+ uncapitalizedPortletName
+							+ "/"
+							+ renderRequest.getPortletMode().toString()
+									.toLowerCase();
+					if (tryResolveView(viewName)) {
+						log.debug("Trying to render mode view " + viewName
+								+ ".gsp");
+					} else {
+						log.debug("Couldn't resolve mode view " + viewName);
+						viewName = "/" + uncapitalizedPortletName + "/render";
+						log.debug("Trying to render view " + viewName);
+					}
+					return new ModelAndView(viewName,
+							(Map<String, ?>) returnValue);
+				}
+			}
+			return null;
+		}
+	}
 
-    private Closure getPortletClosure(PortletRequest request, GroovyObject portlet, String actionParameter, String closurePrefix) {
-        Closure portletClosure = null;
-        if (actionParameter != null) {
-            try {
-                portletClosure = (Closure) portlet.getProperty(actionParameter);
-            } catch (Exception e) {
-                log.warn("Unable to find Closure property "
-                        + actionParameter + " from action request parameter");
-            }
-        }
-        if (portletClosure == null) {
-            String portletMode = request.getPortletMode().toString().toLowerCase();
-            String modeActionName = closurePrefix + StringUtils.capitalize(portletMode);
-            try {
-                portletClosure = (Closure) portlet.getProperty(modeActionName);
-            } catch (Exception e) {
-                log.trace("Didn't find portlet mode " + closurePrefix + " closure: " + modeActionName);
-            }
-        }
-        if (portletClosure == null) {
-            String defaultParam = "do" + StringUtils.capitalize(closurePrefix);
-            log.debug("Falling back to " + defaultParam + " closure");
-            portletClosure = (Closure) portlet.getProperty(defaultParam);
-        }
-        return portletClosure;
-    }
+	private Object getMinimisedConfig() {
+		try {
+			// TODO allow overriding config setting per portlet
+			ConfigObject configObject = (ConfigObject) ConfigurationHolder
+					.getConfig().get("portlet");
+			Object value = null;
+			if (configObject != null) {
+				value = configObject.get("handleMinimised");
+			}
+			if (value != null) {
+				return value;
+			} else {
+				log.debug("portlet.handleMinimised not set, proceeding with normal render");
+				return null;
+			}
+		} catch (ClassCastException e) {
+			log.warn("Unable to determine portlet.handleMinimised setting");
+			return null;
+		}
+	}
 
-    public ModelAndView handleRender(RenderRequest renderRequest, RenderResponse renderResponse, Object o) throws Exception {
-        if (getMinimisedConfig() != null && renderRequest.getWindowState().equals(WindowState.MINIMIZED)) {
-            log.debug("portlet.handleMinimised is set, rendering empty string");
-            renderResponse.setContentType("text/html");
-            renderResponse.getPortletOutputStream().write("".getBytes());
-            return null;
-        } else {
-            GroovyObject portlet = (GroovyObject) o;
-            String action = renderRequest.getParameter("action");
-            Closure render = getRenderClosure(renderRequest, portlet, action);
-            Object returnValue = render.call();
-            if (returnValue instanceof Map) {
-                ((Map)returnValue).put("portletRequest", renderRequest);
-                ((Map)returnValue).put("portletResponse", renderResponse);
-                renderRequest.setAttribute(GrailsApplicationAttributes.CONTROLLER, portlet);
-                String viewName = "/" + ((String) renderRequest.getAttribute(GrailsDispatcherPortlet.PORTLET_NAME)).toLowerCase() +
-                        "/" + renderRequest.getParameter("action") + ".gsp";
-                if (tryResolveView(viewName)) {
-                    log.debug("Trying to render action view " + viewName + ".gsp");
-                } else {
-                    log.debug("Couldn't resolve action view " + viewName);
-                    viewName = "/" + ((String) renderRequest.getAttribute(GrailsDispatcherPortlet.PORTLET_NAME)).toLowerCase()
-                            + "/" + renderRequest.getPortletMode().toString().toLowerCase();
-                    if (tryResolveView(viewName)) {
-                        log.debug("Trying to render mode view " + viewName + ".gsp");
-                    } else {
-                        log.debug("Couldn't resolve mode view " + viewName);
-                        viewName = "/" + ((String) renderRequest.getAttribute(GrailsDispatcherPortlet.PORTLET_NAME)).toLowerCase()
-                                + "/render";
-                        log.debug("Trying to render view " + viewName);
-                    }
-                    return new ModelAndView(viewName, (Map) returnValue);
-                }
-            }
-            return null;
-        }
-    }
+	public boolean tryResolveView(String viewName) {
+		ViewResolver vr = (ViewResolver) applicationContext
+				.getBean("jspViewResolver");
+		try {
+			View view = vr.resolveViewName(viewName, LocaleContextHolder
+					.getLocaleContext().getLocale());
+			return view instanceof GroovyPageView; // GrailsViewResolver will
+													// return a GPV if it exists
+													// otherwise it's a normal
+													// JSP view (which may or
+													// may not exist)
+		} catch (Exception e) {
+			return false;
+		}
+	}
 
-    private Object getMinimisedConfig() {
-        try {
-            //TODO allow overriding config setting per portlet
-            ConfigObject configObject = (ConfigObject) ConfigurationHolder.getConfig().get("portlet");
-            Object value = null;
-            if (configObject != null) {
-                value = configObject.get("handleMinimised");
-            }
-            if (value != null) {
-                return value;
-            } else {
-                log.debug("portlet.handleMinimised not set, proceeding with normal render");
-                return null;
-            }
-        } catch (ClassCastException e) {
-            log.warn("Unable to determine portlet.handleMinimised setting");
-            return null;
-        }
-    }
+	public void setApplicationContext(ApplicationContext applicationContext)
+			throws BeansException {
+		this.applicationContext = applicationContext;
+	}
 
-    public boolean tryResolveView(String viewName) {
-        ViewResolver vr = (ViewResolver) applicationContext.getBean("jspViewResolver");
-        try {
-            View view = vr.resolveViewName(viewName, LocaleContextHolder.getLocaleContext().getLocale());
-            return view instanceof GroovyPageView; // GrailsViewResolver will return a GPV if it exists otherwise it's a normal JSP view (which may or may not exist)
-        } catch (Exception e) {
-            return false;
-        }
-    }
+	@Override
+	public void handleEvent(EventRequest arg0, EventResponse arg1, Object arg2)
+			throws Exception {
+		// TODO Auto-generated method stub
 
-    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
-        this.applicationContext = applicationContext;
-    }
+	}
+
+	@Override
+	public ModelAndView handleResource(ResourceRequest arg0,
+			ResourceResponse arg1, Object arg2) throws Exception {
+		// TODO Auto-generated method stub
+		return null;
+	}
 }
