@@ -10,6 +10,7 @@ if (portletsPluginDir.exists()) {
     //we must not be installed...
     pluginDir = basedir
     pluginLibDir = "${basedir}/lib"
+	println pluginLibDir
     if (!new File(pluginLibDir).exists()) {
         throw new RuntimeException('Unable to find Portlets plugin lib folder')
     }

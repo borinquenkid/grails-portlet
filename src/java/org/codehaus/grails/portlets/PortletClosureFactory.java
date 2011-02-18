@@ -15,6 +15,7 @@ public class PortletClosureFactory {
 	
 	public Closure getActionClosure(PortletRequest request,
 			GroovyObject portlet, String actionParameter) {
+		System.out.println("REAL CALL");
 		return getPortletClosure(request, portlet, actionParameter, "action");
 	}
 

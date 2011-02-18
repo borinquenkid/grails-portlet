@@ -27,6 +27,8 @@ grails.project.dependency.resolution = {
     		excludes 'spring-web'
     		excludes 'spring-webmvc'
     	}
+		test 'org.gmock:gmock:0.8.0'
+        test 'org.hamcrest:hamcrest-library:1.1'
 		//test 'org.jmock:jmock-junit3:2.5.1'
         // specify dependencies here under either 'build', 'compile', 'runtime', 'test' or 'provided' scopes eg.
         // runtime 'mysql:mysql-connector-java:5.1.5'
